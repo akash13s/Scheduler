@@ -7,6 +7,7 @@
 #include "iostream"
 #include "list"
 #include "queue"
+#include "stack"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,6 +123,8 @@ public:
 
 //    virtual bool test_preempt(Process *p, int current_time) = 0;
 
+    virtual void print_name() = 0;
+
     Scheduler() {
         this->quantum = 10000;
         this->max_prio = 4;
@@ -160,10 +163,37 @@ public:
 
 };
 
+class LCFS : public Scheduler {
+private:
+    stack<Process *> run_proc_stack;
+
+public:
+
+    LCFS() : Scheduler() {}
+
+    void add_process(Process *process) {
+        run_proc_stack.push(process);
+    }
+
+    Process *get_next_process() {
+        if (run_proc_stack.empty()) {
+            return nullptr;
+        }
+        Process *process = run_proc_stack.top();
+        run_proc_stack.pop();
+        return process;
+    }
+
+    void print_name() {
+        cout<<"LCFS"<<endl;
+    }
+
+};
+
 class Simulator {
 private:
     DES *des;
-    FCFS *scheduler;
+    Scheduler *scheduler;
     queue<Process *> processes;
     int ofs;
     int num_of_random_nos;
@@ -202,7 +232,7 @@ private:
     }
 
 public:
-    Simulator(DES *des, FCFS *scheduler, istream &input_file, istream &random_file) {
+    Simulator(DES *des, Scheduler *scheduler, istream &input_file, istream &random_file) {
         this->des = des;
         this->scheduler = scheduler;
         this->ofs = 0;
@@ -460,7 +490,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    FCFS *scheduler;
+    Scheduler *scheduler;
     DES *des = new DES();
 
     switch (program_arguments.flag_s_value[0]) {
@@ -468,6 +498,7 @@ int main(int argc, char *argv[]) {
             scheduler = new FCFS();
             break;
         case 'L':
+            scheduler = new LCFS();
             break;
         case 'S':
             break;
