@@ -143,12 +143,10 @@ public:
     FCFS() : Scheduler() {}
 
     void add_process(Process *process) {
-        // add implementation
         runQ.push(process);
     }
 
     Process *get_next_process() {
-        // add implementation
         if (runQ.empty()) {
             return nullptr;
         }
@@ -188,6 +186,45 @@ public:
         cout<<"LCFS"<<endl;
     }
 
+};
+
+class SRTF: public Scheduler {
+private:
+    list<Process *> runQ;
+
+public:
+    SRTF() : Scheduler() {}
+
+    void add_process(Process *process) {
+        bool process_inserted = false;
+        auto itr = runQ.begin();
+
+        while (itr != runQ.end()) {
+            if ((*itr)->remaining_cpu_time > process->remaining_cpu_time) {
+                runQ.insert(itr, process);
+                process_inserted = true;
+                break;
+            }
+            itr++;
+        }
+
+        if (!process_inserted) {
+            runQ.push_back(process);
+        }
+    }
+
+    Process *get_next_process() {
+        if (runQ.empty()) {
+            return nullptr;
+        }
+        Process *process = runQ.front();
+        runQ.pop_front();
+        return process;
+    }
+
+    void print_name() {
+        cout<<"SRTF"<<endl;
+    }
 };
 
 class Simulator {
@@ -501,6 +538,7 @@ int main(int argc, char *argv[]) {
             scheduler = new LCFS();
             break;
         case 'S':
+            scheduler = new SRTF();
             break;
         case 'R':
             break;
