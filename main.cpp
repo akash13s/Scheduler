@@ -12,7 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "vector"
 #include "fstream"
+#include <regex>
 
 using namespace std;
 
@@ -270,6 +272,72 @@ public:
 
     void print_name() {
         cout << "RR" << " " << quantum << endl;
+    }
+
+};
+
+class PRIO : public Scheduler {
+private:
+    vector<queue<Process *> > *activeQ;
+    vector<queue<Process *> > *expiredQ;
+
+public:
+    PRIO(int quantum, int max_prio) : Scheduler() {
+        this->quantum = quantum;
+        this->max_prio = max_prio;
+
+        activeQ = new vector<queue<Process *> >();
+        expiredQ = new vector<queue<Process *> >();
+
+        for (int i = 0; i < max_prio; i++) {
+            activeQ->push_back(queue<Process *>());
+            expiredQ->push_back(queue<Process *>());
+        }
+    }
+
+    void add_process(Process *process) {
+        if (process->remaining_burst_time > 0) {
+            process->dynamic_prio--;
+            // if the dynamic_prio == -1, we need to add the process to the expired queue with new dynamic_prio = static_prio - 1
+            if (process->dynamic_prio == -1) {
+                process->dynamic_prio = process->static_prio - 1;
+                (*expiredQ)[process->dynamic_prio].push(process);
+                return;
+            }
+        } else {
+            process->dynamic_prio = process->static_prio - 1;
+        }
+        (*activeQ)[process->dynamic_prio].push(process);
+    }
+
+    Process *get_next_process() {
+
+        Process *next_process = nullptr;
+
+        for (auto itr = (*activeQ).rbegin(); itr != (*activeQ).rend(); itr++) {
+            if (!(*itr).empty()) {
+                next_process = (*itr).front();
+                (*itr).pop();
+                return next_process;
+            }
+        }
+
+        swap(activeQ, expiredQ);
+
+        for (auto itr = (*activeQ).rbegin(); itr != (*activeQ).rend(); itr++) {
+            if (!(*itr).empty()) {
+                next_process = (*itr).front();
+                (*itr).pop();
+                return next_process;
+            }
+        }
+
+        return next_process;
+
+    }
+
+    void print_name() {
+        cout << "PRIO " << quantum << endl;
     }
 
 };
@@ -641,8 +709,6 @@ int main(int argc, char *argv[]) {
     Scheduler *scheduler;
     DES *des = new DES();
 
-    string quantum;
-
     switch (program_arguments.flag_s_value[0]) {
         case 'F':
             scheduler = new FCFS();
@@ -654,7 +720,7 @@ int main(int argc, char *argv[]) {
             scheduler = new SRTF();
             break;
         case 'R': {
-            quantum = program_arguments.flag_s_value.substr(1);
+            string quantum = program_arguments.flag_s_value.substr(1);
             try {
                 scheduler = new RR(stoi(quantum));
             } catch (...) {
@@ -663,8 +729,23 @@ int main(int argc, char *argv[]) {
             }
             break;
         }
-        case 'P':
+        case 'P': {
+            regex pattern("P(\\d+)(?::(\\d+))?");
+            smatch matches;
+            if (regex_match(program_arguments.flag_s_value, matches, pattern)) {
+                if (matches.size() < 2) {
+                    cout << "Error: No quantum provided" << endl;
+                    return 1;
+                }
+                int quantum = stoi(matches[1]);
+                int max_prio = matches[2].matched ? std::stoi(matches[2]) : 4;
+                scheduler = new PRIO(quantum, max_prio);
+            } else {
+                cout << "Error: Incorrect args passed" << endl;
+                return 1;
+            }
             break;
+        }
         case 'E':
             break;
         default:
