@@ -533,7 +533,7 @@ public:
                             // Create an event for PREEMPTION
                             new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
                             des->put_event(new_event);
-                            proc->remaining_burst_time -= cpu_burst_duration;
+                            proc->remaining_burst_time = new_cpu_burst - cpu_burst_duration;
                             proc->remaining_cpu_time -= cpu_burst_duration;
                         } else {
                             // Create event for either DONE or BLOCKED state
