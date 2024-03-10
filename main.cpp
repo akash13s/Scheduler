@@ -16,6 +16,24 @@
 
 using namespace std;
 
+struct Program_Arguments {
+    bool flag_v_enabled;
+    bool flag_t_enabled;
+    bool flag_e_enabled;
+    bool flag_p_enabled;
+    bool flag_s_enabled;
+    string flag_s_value;
+
+    Program_Arguments() {
+        flag_v_enabled = false;
+        flag_t_enabled = false;
+        flag_e_enabled = false;
+        flag_p_enabled = false;
+        flag_s_enabled = false;
+        flag_s_value = "";
+    }
+};
+
 struct Process {
     int pid;
     int arrival_time;
@@ -156,7 +174,7 @@ public:
     }
 
     void print_name() {
-        cout<<"FCFS"<<endl;
+        cout << "FCFS" << endl;
     }
 
 };
@@ -183,12 +201,12 @@ public:
     }
 
     void print_name() {
-        cout<<"LCFS"<<endl;
+        cout << "LCFS" << endl;
     }
 
 };
 
-class SRTF: public Scheduler {
+class SRTF : public Scheduler {
 private:
     list<Process *> runQ;
 
@@ -223,8 +241,37 @@ public:
     }
 
     void print_name() {
-        cout<<"SRTF"<<endl;
+        cout << "SRTF" << endl;
     }
+};
+
+class RR : public Scheduler {
+private:
+    queue<Process *> runQ;
+
+public:
+
+    RR(int quantum) : Scheduler() {
+        this->quantum = quantum;
+    }
+
+    void add_process(Process *process) {
+        runQ.push(process);
+    }
+
+    Process *get_next_process() {
+        if (runQ.empty()) {
+            return nullptr;
+        }
+        Process *process = runQ.front();
+        runQ.pop();
+        return process;
+    }
+
+    void print_name() {
+        cout << "RR" << " " << quantum << endl;
+    }
+
 };
 
 class Simulator {
@@ -241,6 +288,7 @@ private:
 
     int start_of_io_utilisation;
     int processes_in_blocked_state;
+    Program_Arguments program_args;
 
     void init_random_array(istream &random_file) {
         random_file >> num_of_random_nos;
@@ -268,8 +316,42 @@ private:
         }
     }
 
+    string enum_to_string(State state) {
+        string s;
+        switch (state) {
+            case CREATED:
+                s = "CREATED";
+                break;
+            case READY:
+                s = "READY";
+                break;
+            case RUNNING:
+                s = "RUNNG";
+                break;
+            case BLOCK:
+                s = "BLOCK";
+                break;
+            case DONE:
+                s = "DONE";
+                break;
+            default:
+                s = "UNKNOWN";
+        }
+
+        return s;
+    }
+
+    void print_event(int timestamp, Process *proc, int curr_state_time, State prev_state, State new_state) {
+        if (program_args.flag_v_enabled) {
+            printf("%d %d %d: %s -> %s", timestamp, proc->pid, curr_state_time, enum_to_string(prev_state).c_str(),
+                   enum_to_string(new_state).c_str());
+            printf(" total_cpu_rem=%d burst_rem=%d\n", proc->remaining_cpu_time, proc->remaining_burst_time);
+        }
+    }
+
 public:
-    Simulator(DES *des, Scheduler *scheduler, istream &input_file, istream &random_file) {
+    Simulator(DES *des, Scheduler *scheduler, istream &input_file, istream &random_file,
+              Program_Arguments program_args) {
         this->des = des;
         this->scheduler = scheduler;
         this->ofs = 0;
@@ -278,6 +360,7 @@ public:
         this->time_io_busy = 0;
         this->start_of_io_utilisation = 0;
         this->processes_in_blocked_state = 0;
+        this->program_args = program_args;
         init_random_array(random_file);
         create_processes(input_file);
     }
@@ -354,6 +437,8 @@ public:
             State transition_from = evt->prev_state;
             State transition_to = evt->new_state;
 
+            print_event(CURRENT_TIME, proc, (CURRENT_TIME - proc->state_ts), transition_from, transition_to);
+
             if (transition_from == READY) {
                 proc->cpu_wait_time += CURRENT_TIME - proc->state_ts;
             }
@@ -375,51 +460,86 @@ public:
                 case READY: {
                     // must come from BLOCKED or CREATED
                     // add to run queue, no event created
-                    scheduler->add_process(proc);
-                    CALL_SCHEDULER = true;
-                    break;
-                }
-                case PREEMPT: {
-                    // similar to TRANS_TO_READY
-                    // must come from RUNNING (preemption)
-                    // add to runqueue (no event is generated)
 
+                    if (transition_from == RUNNING) {
+                        CURRENT_RUNNING_PROCESS = nullptr;
+                    }
                     scheduler->add_process(proc);
                     CALL_SCHEDULER = true;
                     break;
                 }
+//                case PREEMPT: {
+//                    // similar to TRANS_TO_READY
+//                    // must come from RUNNING (preemption)
+//                    // add to runqueue (no event is generated)
+//
+//                    scheduler->add_process(proc);
+//                    CALL_SCHEDULER = true;
+//                    break;
+//                }
                 case RUNNING: {
                     // create event for either preemption or blocking
 
                     int cpu_burst_duration;
                     bool PREEMPT_PROCESS;
 
-                    cpu_burst_duration = get_random_number(proc->cpu_burst);
+                    // remaining burst time can never exceed quantum
+                    if (proc->remaining_burst_time > 0) {
+                        // process can goto either DONE, PREEMPTED, or BLOCKED state
 
-                    if (cpu_burst_duration > scheduler->quantum) {
-                        proc->remaining_burst_time = cpu_burst_duration - scheduler->quantum;
-                        cpu_burst_duration = scheduler->quantum;
-                        PREEMPT_PROCESS = true;
-                    } else {
-                        PREEMPT_PROCESS = false;
-                    }
+                        if (proc->remaining_burst_time > scheduler->quantum) { // create event for PREEMPTION
+                            proc->remaining_burst_time -= scheduler->quantum;
+                            cpu_burst_duration = scheduler->quantum;
+                            proc->remaining_cpu_time -= cpu_burst_duration;
+                            new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
+                            des->put_event(new_event);
+                        } else if (proc->remaining_burst_time == proc->remaining_cpu_time) { // create event for DONE state
+                            cpu_burst_duration = proc->remaining_cpu_time;
+                            new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, DONE, proc);
+                            des->put_event(new_event);
+                            proc->remaining_burst_time = 0;
+                            proc->remaining_cpu_time = 0;
+                        } else { // Create event to BLOCKED state
+                            cpu_burst_duration = proc->remaining_burst_time;
+                            new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, BLOCK, proc);
+                            des->put_event(new_event);
+                            proc->remaining_cpu_time -= cpu_burst_duration;
+                            proc->remaining_burst_time = 0;
+                        }
 
-                    if (proc->remaining_cpu_time <= cpu_burst_duration) {
-                        cpu_burst_duration = proc->remaining_cpu_time;
-                        new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, DONE, proc);
-                        des->put_event(new_event);
-                        proc->remaining_burst_time = 0;
-                        proc->remaining_cpu_time = 0;
-                    } else if (PREEMPT_PROCESS) {
-                        // Create preemption event RUNNING -> READY
-                        new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
-                        des->put_event(new_event);
-                        proc->remaining_cpu_time -= cpu_burst_duration;
                     } else {
-                        // Create block event RUNNING -> BLOCKED
-                        new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, BLOCK, proc);
-                        des->put_event(new_event);
-                        proc->remaining_cpu_time -= cpu_burst_duration;
+                        // process can goto either to DONE, PREEMPT, BLOCK state
+
+                        cpu_burst_duration = get_random_number(proc->cpu_burst);
+
+                        if (cpu_burst_duration > scheduler->quantum) {
+                            proc->remaining_burst_time = cpu_burst_duration - scheduler->quantum;
+                            cpu_burst_duration = scheduler->quantum;
+                            proc->remaining_cpu_time -= cpu_burst_duration;
+                            PREEMPT_PROCESS = true;
+                        } else {
+                            PREEMPT_PROCESS = false;
+                        }
+
+                        if (PREEMPT_PROCESS) {
+                            // Create preemption event RUNNING -> READY
+                            new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
+                            des->put_event(new_event);
+                        } else {
+                            // Create event for either DONE or BLOCKED state
+                            if (proc->remaining_cpu_time <= cpu_burst_duration) {
+                                cpu_burst_duration = proc->remaining_cpu_time;
+                                new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, DONE, proc);
+                                des->put_event(new_event);
+                                proc->remaining_burst_time = 0;
+                                proc->remaining_cpu_time = 0;
+                            } else {
+                                // Create block event RUNNING -> BLOCKED
+                                new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, BLOCK, proc);
+                                des->put_event(new_event);
+                                proc->remaining_cpu_time -= cpu_burst_duration;
+                            }
+                        }
                     }
 
                     time_cpu_busy += cpu_burst_duration;
@@ -476,25 +596,6 @@ public:
 
 };
 
-
-struct Program_Arguments {
-    bool flag_v_enabled;
-    bool flag_t_enabled;
-    bool flag_e_enabled;
-    bool flag_p_enabled;
-    bool flag_s_enabled;
-    string flag_s_value;
-
-    Program_Arguments() {
-        flag_v_enabled = false;
-        flag_t_enabled = false;
-        flag_e_enabled = false;
-        flag_p_enabled = false;
-        flag_s_enabled = false;
-        flag_s_value = "";
-    }
-};
-
 int main(int argc, char *argv[]) {
     int c;
 
@@ -530,6 +631,8 @@ int main(int argc, char *argv[]) {
     Scheduler *scheduler;
     DES *des = new DES();
 
+    string quantum;
+
     switch (program_arguments.flag_s_value[0]) {
         case 'F':
             scheduler = new FCFS();
@@ -540,8 +643,16 @@ int main(int argc, char *argv[]) {
         case 'S':
             scheduler = new SRTF();
             break;
-        case 'R':
+        case 'R': {
+            quantum = program_arguments.flag_s_value.substr(1);
+            try {
+                scheduler = new RR(stoi(quantum));
+            } catch (...) {
+                cout << "Error: Quantum should be a valid number" << endl;
+                return 1;
+            }
             break;
+        }
         case 'P':
             break;
         case 'E':
@@ -559,7 +670,7 @@ int main(int argc, char *argv[]) {
     ifstream input_file(argv[optind]);
     ifstream random_file(argv[optind + 1]);
 
-    Simulator *simulator = new Simulator(des, scheduler, input_file, random_file);
+    Simulator *simulator = new Simulator(des, scheduler, input_file, random_file, program_arguments);
     simulator->simulate();
     simulator->print_summary();
 
