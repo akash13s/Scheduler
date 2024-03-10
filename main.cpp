@@ -493,7 +493,8 @@ public:
                             proc->remaining_cpu_time -= cpu_burst_duration;
                             new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
                             des->put_event(new_event);
-                        } else if (proc->remaining_burst_time == proc->remaining_cpu_time) { // create event for DONE state
+                        } else if (proc->remaining_burst_time ==
+                                   proc->remaining_cpu_time) { // create event for DONE state
                             cpu_burst_duration = proc->remaining_cpu_time;
                             new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, DONE, proc);
                             des->put_event(new_event);
@@ -510,21 +511,30 @@ public:
                     } else {
                         // process can goto either to DONE, PREEMPT, BLOCK state
 
-                        cpu_burst_duration = get_random_number(proc->cpu_burst);
+                        int new_cpu_burst = get_random_number(proc->cpu_burst);
 
-                        if (cpu_burst_duration > scheduler->quantum) {
-                            proc->remaining_burst_time = cpu_burst_duration - scheduler->quantum;
+                        // dummy
+                        if (new_cpu_burst > proc->remaining_cpu_time) {
+                            new_cpu_burst = proc->remaining_cpu_time;
+                        }
+
+                        if (new_cpu_burst > scheduler->quantum) {
                             cpu_burst_duration = scheduler->quantum;
-                            proc->remaining_cpu_time -= cpu_burst_duration;
                             PREEMPT_PROCESS = true;
                         } else {
+                            cpu_burst_duration = new_cpu_burst;
                             PREEMPT_PROCESS = false;
                         }
 
+
+//                        printf("cpu_burst_duration=%d new_cpu_burst=%d\n", cpu_burst_duration, new_cpu_burst);
+
                         if (PREEMPT_PROCESS) {
-                            // Create preemption event RUNNING -> READY
+                            // Create an event for PREEMPTION
                             new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
                             des->put_event(new_event);
+                            proc->remaining_burst_time -= cpu_burst_duration;
+                            proc->remaining_cpu_time -= cpu_burst_duration;
                         } else {
                             // Create event for either DONE or BLOCKED state
                             if (proc->remaining_cpu_time <= cpu_burst_duration) {
