@@ -49,6 +49,7 @@ struct Process {
     int io_wait_time;
     int cpu_wait_time;
     int state_ts;
+    int end_running_time;
     int remaining_cpu_time;
     int remaining_burst_time;
 
@@ -60,6 +61,7 @@ struct Process {
         this->io_burst = io_burst;
 
         this->state_ts = arrival_time;
+        this->end_running_time = state_ts;
         this->cpu_wait_time = 0;
         this->io_wait_time = 0;
         this->remaining_cpu_time = total_cpu_time;
@@ -123,8 +125,18 @@ public:
         return event;
     }
 
-    void rm_event() {
-        // will implement later
+    void rm_event(Process *process) {
+        // remove event in the DES layer with process id = process.pid
+        auto itr = event_list.begin();
+        while (itr != event_list.end()) {
+            if ((*itr)->process->pid == process->pid) {
+                break;
+            }
+            itr++;
+        }
+        if (itr!=event_list.end()) {
+            event_list.erase(itr);
+        }
     }
 
     int get_next_event_time() {
@@ -141,7 +153,7 @@ public:
 
     virtual Process *get_next_process() = 0;
 
-//    virtual bool test_preempt(Process *p, int current_time) = 0;
+    virtual bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) = 0;
 
     virtual void print_name() = 0;
 
@@ -179,6 +191,10 @@ public:
         cout << "FCFS" << endl;
     }
 
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return false;
+    }
+
 };
 
 class LCFS : public Scheduler {
@@ -204,6 +220,10 @@ public:
 
     void print_name() {
         cout << "LCFS" << endl;
+    }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return false;
     }
 
 };
@@ -245,6 +265,10 @@ public:
     void print_name() {
         cout << "SRTF" << endl;
     }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return false;
+    }
 };
 
 class RR : public Scheduler {
@@ -272,6 +296,10 @@ public:
 
     void print_name() {
         cout << "RR" << " " << quantum << endl;
+    }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return false;
     }
 
 };
@@ -338,6 +366,81 @@ public:
 
     void print_name() {
         cout << "PRIO " << quantum << endl;
+    }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return false;
+    }
+
+};
+
+class PREPRIO : public Scheduler {
+private:
+    vector<queue<Process *> > *activeQ;
+    vector<queue<Process *> > *expiredQ;
+
+public:
+    PREPRIO(int quantum, int max_prio) : Scheduler() {
+        this->quantum = quantum;
+        this->max_prio = max_prio;
+
+        activeQ = new vector<queue<Process *> >();
+        expiredQ = new vector<queue<Process *> >();
+
+        for (int i = 0; i < max_prio; i++) {
+            activeQ->push_back(queue<Process *>());
+            expiredQ->push_back(queue<Process *>());
+        }
+    }
+
+    void add_process(Process *process) {
+        if (process->remaining_burst_time > 0) {
+            process->dynamic_prio--;
+            // if the dynamic_prio == -1, we need to add the process to the expired queue with new dynamic_prio = static_prio - 1
+            if (process->dynamic_prio == -1) {
+                process->dynamic_prio = process->static_prio - 1;
+                (*expiredQ)[process->dynamic_prio].push(process);
+                return;
+            }
+        } else {
+            process->dynamic_prio = process->static_prio - 1;
+        }
+        (*activeQ)[process->dynamic_prio].push(process);
+    }
+
+    Process *get_next_process() {
+
+        Process *next_process = nullptr;
+
+        for (auto itr = (*activeQ).rbegin(); itr != (*activeQ).rend(); itr++) {
+            if (!(*itr).empty()) {
+                next_process = (*itr).front();
+                (*itr).pop();
+                return next_process;
+            }
+        }
+
+        swap(activeQ, expiredQ);
+
+        for (auto itr = (*activeQ).rbegin(); itr != (*activeQ).rend(); itr++) {
+            if (!(*itr).empty()) {
+                next_process = (*itr).front();
+                (*itr).pop();
+                return next_process;
+            }
+        }
+
+        return next_process;
+
+    }
+
+    void print_name() {
+        cout << "PREPRIO " << quantum << endl;
+    }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+        return preempting_process->dynamic_prio > current_running_process->dynamic_prio &&
+               current_time < current_running_process->end_running_time;
     }
 
 };
@@ -413,7 +516,7 @@ private:
         if (program_args.flag_v_enabled) {
             printf("%d %d %d: %s -> %s", timestamp, proc->pid, curr_state_time, enum_to_string(prev_state).c_str(),
                    enum_to_string(new_state).c_str());
-            printf(" total_cpu_rem=%d burst_rem=%d\n", proc->remaining_cpu_time, proc->remaining_burst_time);
+            printf(" total_cpu_rem=%d burst_rem=%d prio=%d\n", proc->remaining_cpu_time, proc->remaining_burst_time, proc->dynamic_prio);
         }
     }
 
@@ -529,10 +632,28 @@ public:
                     // must come from BLOCKED or CREATED
                     // add to run queue, no event created
 
+                    scheduler->add_process(proc);
+
+                    int delta;
+
                     if (transition_from == RUNNING) {
                         CURRENT_RUNNING_PROCESS = nullptr;
+                    } else if ((transition_from == CREATED || transition_from == BLOCK) &&
+                               CURRENT_RUNNING_PROCESS != nullptr) {
+                        bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc, CURRENT_TIME);
+                        if (PREEMPT_CURRENT_PROCESS) {
+//                            printf("Process pid=%d preempted at t=%d by pid=%d\n", CURRENT_RUNNING_PROCESS->pid, CURRENT_TIME, proc->pid);
+                            // remove future event for the preempted process from DES. At max the current running process will have just 1 future event.
+                            des->rm_event(CURRENT_RUNNING_PROCESS);
+                            new_event = new Event(CURRENT_TIME, RUNNING, READY, CURRENT_RUNNING_PROCESS);
+                            des->put_event(new_event);
+                            delta = CURRENT_RUNNING_PROCESS->end_running_time - CURRENT_TIME;
+                            proc->end_running_time = CURRENT_TIME;
+                            CURRENT_RUNNING_PROCESS->remaining_cpu_time += delta;
+                            CURRENT_RUNNING_PROCESS->remaining_burst_time += delta;
+                            time_cpu_busy -= delta;
+                        }
                     }
-                    scheduler->add_process(proc);
                     CALL_SCHEDULER = true;
                     break;
                 }
@@ -603,6 +724,7 @@ public:
                     }
 
                     time_cpu_busy += cpu_burst_duration;
+                    proc->end_running_time = CURRENT_TIME + cpu_burst_duration;
 
                     break;
                 }
@@ -728,8 +850,23 @@ int main(int argc, char *argv[]) {
             }
             break;
         }
-        case 'E':
+        case 'E': {
+            regex pattern("E(\\d+)(?::(\\d+))?");
+            smatch matches;
+            if (regex_match(program_arguments.flag_s_value, matches, pattern)) {
+                if (matches.size() < 2) {
+                    cout << "Error: No quantum provided" << endl;
+                    return 1;
+                }
+                int quantum = stoi(matches[1]);
+                int max_prio = matches[2].matched ? std::stoi(matches[2]) : 4;
+                scheduler = new PREPRIO(quantum, max_prio);
+            } else {
+                cout << "Error: Incorrect args passed" << endl;
+                return 1;
+            }
             break;
+        }
         default:
             cout << "Error: Incorrect scheduler specified" << endl;
             break;
