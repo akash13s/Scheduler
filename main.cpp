@@ -536,20 +536,10 @@ public:
                     CALL_SCHEDULER = true;
                     break;
                 }
-//                case PREEMPT: {
-//                    // similar to TRANS_TO_READY
-//                    // must come from RUNNING (preemption)
-//                    // add to runqueue (no event is generated)
-//
-//                    scheduler->add_process(proc);
-//                    CALL_SCHEDULER = true;
-//                    break;
-//                }
                 case RUNNING: {
                     // create event for either preemption or blocking
 
                     int cpu_burst_duration;
-                    bool PREEMPT_PROCESS;
 
                     // remaining burst time can never exceed quantum
                     if (proc->remaining_burst_time > 0) {
@@ -588,22 +578,13 @@ public:
 
                         if (new_cpu_burst > scheduler->quantum) {
                             cpu_burst_duration = scheduler->quantum;
-                            PREEMPT_PROCESS = true;
-                        } else {
-                            cpu_burst_duration = new_cpu_burst;
-                            PREEMPT_PROCESS = false;
-                        }
-
-
-//                        printf("cpu_burst_duration=%d new_cpu_burst=%d\n", cpu_burst_duration, new_cpu_burst);
-
-                        if (PREEMPT_PROCESS) {
                             // Create an event for PREEMPTION
                             new_event = new Event(CURRENT_TIME + cpu_burst_duration, RUNNING, READY, proc);
                             des->put_event(new_event);
                             proc->remaining_burst_time = new_cpu_burst - cpu_burst_duration;
                             proc->remaining_cpu_time -= cpu_burst_duration;
                         } else {
+                            cpu_burst_duration = new_cpu_burst;
                             // Create event for either DONE or BLOCKED state
                             if (proc->remaining_cpu_time <= cpu_burst_duration) {
                                 cpu_burst_duration = proc->remaining_cpu_time;
@@ -618,6 +599,7 @@ public:
                                 proc->remaining_cpu_time -= cpu_burst_duration;
                             }
                         }
+//                        printf("cpu_burst_duration=%d new_cpu_burst=%d\n", cpu_burst_duration, new_cpu_burst);
                     }
 
                     time_cpu_busy += cpu_burst_duration;
