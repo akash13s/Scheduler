@@ -608,6 +608,10 @@ public:
             State transition_from = evt->prev_state;
             State transition_to = evt->new_state;
 
+//            if ((CURRENT_TIME == 786 || CURRENT_TIME == 788 || CURRENT_TIME == 805) && (proc->pid == 3 || proc->pid == 1)) {
+//                cout<<"Muchas gracias"<<endl;
+//            }
+
             print_event(CURRENT_TIME, proc, (CURRENT_TIME - proc->state_ts), transition_from, transition_to);
 
             if (transition_from == READY) {
@@ -648,7 +652,8 @@ public:
                             new_event = new Event(CURRENT_TIME, RUNNING, READY, CURRENT_RUNNING_PROCESS);
                             des->put_event(new_event);
                             delta = CURRENT_RUNNING_PROCESS->end_running_time - CURRENT_TIME;
-                            proc->end_running_time = CURRENT_TIME;
+                            // check below line
+                            CURRENT_RUNNING_PROCESS->end_running_time = CURRENT_TIME;
                             CURRENT_RUNNING_PROCESS->remaining_cpu_time += delta;
                             CURRENT_RUNNING_PROCESS->remaining_burst_time += delta;
                             time_cpu_busy -= delta;
@@ -692,7 +697,6 @@ public:
 
                         int new_cpu_burst = get_random_number(proc->cpu_burst);
 
-                        // dummy
                         if (new_cpu_burst > proc->remaining_cpu_time) {
                             new_cpu_burst = proc->remaining_cpu_time;
                         }
