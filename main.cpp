@@ -93,9 +93,10 @@ struct Event {
 
 class DES {
 private:
-    list<Event *> event_list;
 
 public:
+    list<Event *> event_list;
+
     DES() {}
 
     void put_event(Event *event) {
@@ -153,7 +154,7 @@ public:
 
     virtual Process *get_next_process() = 0;
 
-    virtual bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) = 0;
+    virtual bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) = 0;
 
     virtual void print_name() = 0;
 
@@ -191,7 +192,7 @@ public:
         cout << "FCFS" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return false;
     }
 
@@ -222,7 +223,7 @@ public:
         cout << "LCFS" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return false;
     }
 
@@ -266,7 +267,7 @@ public:
         cout << "SRTF" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return false;
     }
 };
@@ -298,7 +299,7 @@ public:
         cout << "RR" << " " << quantum << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return false;
     }
 
@@ -368,7 +369,7 @@ public:
         cout << "PRIO " << quantum << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return false;
     }
 
@@ -438,9 +439,18 @@ public:
         cout << "PREPRIO " << quantum << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time) {
+    bool timestamp_check(int time, int pid, list<Event*> event_list) {
+        for (auto itr = event_list.begin(); itr!=event_list.end(); itr++) {
+            if ((*itr)->process->pid == pid && (*itr)->timestamp == time) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
         return preempting_process->dynamic_prio > current_running_process->dynamic_prio &&
-               current_time < current_running_process->end_running_time;
+                timestamp_check(current_time, current_running_process->pid, event_list);
     }
 
 };
@@ -644,7 +654,7 @@ public:
                         CURRENT_RUNNING_PROCESS = nullptr;
                     } else if ((transition_from == CREATED || transition_from == BLOCK) &&
                                CURRENT_RUNNING_PROCESS != nullptr) {
-                        bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc, CURRENT_TIME);
+                        bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc, CURRENT_TIME, des->event_list);
                         if (PREEMPT_CURRENT_PROCESS) {
 //                            printf("Process pid=%d preempted at t=%d by pid=%d\n", CURRENT_RUNNING_PROCESS->pid, CURRENT_TIME, proc->pid);
                             // remove future event for the preempted process from DES. At max the current running process will have just 1 future event.
