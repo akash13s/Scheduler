@@ -65,6 +65,7 @@ struct Process {
         this->cpu_wait_time = 0;
         this->io_wait_time = 0;
         this->remaining_cpu_time = total_cpu_time;
+        this->remaining_burst_time = 0;
     }
 };
 
