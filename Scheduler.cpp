@@ -618,10 +618,6 @@ public:
             State transition_from = evt->prev_state;
             State transition_to = evt->new_state;
 
-//            if ((CURRENT_TIME == 786 || CURRENT_TIME == 788 || CURRENT_TIME == 805) && (proc->pid == 3 || proc->pid == 1)) {
-//                cout<<"Muchas gracias"<<endl;
-//            }
-
             print_event(CURRENT_TIME, proc, (CURRENT_TIME - proc->state_ts), transition_from, transition_to);
 
             if (transition_from == READY) {
@@ -656,13 +652,11 @@ public:
                                CURRENT_RUNNING_PROCESS != nullptr) {
                         bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc, CURRENT_TIME, des->event_list);
                         if (PREEMPT_CURRENT_PROCESS) {
-//                            printf("Process pid=%d preempted at t=%d by pid=%d\n", CURRENT_RUNNING_PROCESS->pid, CURRENT_TIME, proc->pid);
-                            // remove future event for the preempted process from DES. At max the current running process will have just 1 future event.
+                            // remove future event for the preempted process from DES.
                             des->rm_event(CURRENT_RUNNING_PROCESS);
                             new_event = new Event(CURRENT_TIME, RUNNING, READY, CURRENT_RUNNING_PROCESS);
                             des->put_event(new_event);
                             delta = CURRENT_RUNNING_PROCESS->end_running_time - CURRENT_TIME;
-                            // check below line
                             CURRENT_RUNNING_PROCESS->end_running_time = CURRENT_TIME;
                             CURRENT_RUNNING_PROCESS->remaining_cpu_time += delta;
                             CURRENT_RUNNING_PROCESS->remaining_burst_time += delta;
@@ -679,7 +673,7 @@ public:
 
                     // remaining burst time can never exceed quantum
                     if (proc->remaining_burst_time > 0) {
-                        // process can goto either DONE, PREEMPTED, or BLOCKED state
+                        // process can goto either DONE, READY, or BLOCK state
 
                         if (proc->remaining_burst_time > scheduler->quantum) { // create event for PREEMPTION
                             proc->remaining_burst_time -= scheduler->quantum;
@@ -734,7 +728,6 @@ public:
                                 proc->remaining_cpu_time -= cpu_burst_duration;
                             }
                         }
-//                        printf("cpu_burst_duration=%d new_cpu_burst=%d\n", cpu_burst_duration, new_cpu_burst);
                     }
 
                     time_cpu_busy += cpu_burst_duration;
