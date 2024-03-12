@@ -849,29 +849,19 @@ int main(int argc, char *argv[]) {
             }
             break;
         }
-        case 'P': {
-            size_t colon_pos = program_arguments.flag_s_value.find(':');
-            if (colon_pos != string::npos) {
-                int quantum = stoi(program_arguments.flag_s_value.substr(1, colon_pos - 1));
-                int max_prio = stoi(program_arguments.flag_s_value.substr(colon_pos + 1));
-
-                scheduler = new PRIO(quantum, max_prio);
-            } else {
-                int quantum = stoi(program_arguments.flag_s_value.substr(1));
-                scheduler = new PRIO(quantum, 4);
-            }
-            break;
-        }
+        case 'P':
         case 'E': {
-            size_t colon_pos = program_arguments.flag_s_value.find(':');
-            if (colon_pos != string::npos) {
-                int quantum = stoi(program_arguments.flag_s_value.substr(1, colon_pos - 1));
-                int max_prio = stoi(program_arguments.flag_s_value.substr(colon_pos + 1));
-
-                scheduler = new PREPRIO(quantum, max_prio);
+            int char_pos = program_arguments.flag_s_value.find(':');
+            int time_quantum = stoi(program_arguments.flag_s_value.substr(1));
+            int max_prio = 4;
+            if (char_pos != string::npos) {
+                time_quantum = stoi(program_arguments.flag_s_value.substr(1, char_pos - 1));
+                max_prio = stoi(program_arguments.flag_s_value.substr(char_pos + 1));
+            }
+            if (program_arguments.flag_s_value[0] == 'P') {
+                scheduler = new PRIO(time_quantum, max_prio);
             } else {
-                int quantum = stoi(program_arguments.flag_s_value.substr(1));
-                scheduler = new PREPRIO(quantum, 4);
+                scheduler = new PREPRIO(time_quantum, max_prio);
             }
             break;
         }
