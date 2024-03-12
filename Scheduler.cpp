@@ -135,7 +135,7 @@ public:
             }
             itr++;
         }
-        if (itr!=event_list.end()) {
+        if (itr != event_list.end()) {
             event_list.erase(itr);
         }
     }
@@ -154,7 +154,8 @@ public:
 
     virtual Process *get_next_process() = 0;
 
-    virtual bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) = 0;
+    virtual bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                              list<Event *> &event_list) = 0;
 
     virtual void print_name() = 0;
 
@@ -192,7 +193,8 @@ public:
         cout << "FCFS" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return false;
     }
 
@@ -223,7 +225,8 @@ public:
         cout << "LCFS" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return false;
     }
 
@@ -267,7 +270,8 @@ public:
         cout << "SRTF" << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return false;
     }
 };
@@ -299,7 +303,8 @@ public:
         cout << "RR" << " " << quantum << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return false;
     }
 
@@ -369,7 +374,8 @@ public:
         cout << "PRIO " << quantum << endl;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return false;
     }
 
@@ -439,8 +445,8 @@ public:
         cout << "PREPRIO " << quantum << endl;
     }
 
-    bool timestamp_check(int time, int pid, list<Event*> event_list) {
-        for (auto itr = event_list.begin(); itr!=event_list.end(); itr++) {
+    bool timestamp_check(int time, int pid, list<Event *> event_list) {
+        for (auto itr = event_list.begin(); itr != event_list.end(); itr++) {
             if ((*itr)->process->pid == pid && (*itr)->timestamp == time) {
                 return false;
             }
@@ -448,9 +454,10 @@ public:
         return true;
     }
 
-    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time, list<Event*> &event_list) {
+    bool test_preempt(Process *current_running_process, Process *preempting_process, int current_time,
+                      list<Event *> &event_list) {
         return preempting_process->dynamic_prio > current_running_process->dynamic_prio &&
-                timestamp_check(current_time, current_running_process->pid, event_list);
+               timestamp_check(current_time, current_running_process->pid, event_list);
     }
 
 };
@@ -526,7 +533,8 @@ private:
         if (program_args.flag_v_enabled) {
             printf("%d %d %d: %s -> %s", timestamp, proc->pid, curr_state_time, enum_to_string(prev_state).c_str(),
                    enum_to_string(new_state).c_str());
-            printf(" total_cpu_rem=%d burst_rem=%d prio=%d\n", proc->remaining_cpu_time, proc->remaining_burst_time, proc->dynamic_prio);
+            printf(" total_cpu_rem=%d burst_rem=%d prio=%d\n", proc->remaining_cpu_time, proc->remaining_burst_time,
+                   proc->dynamic_prio);
         }
     }
 
@@ -650,7 +658,8 @@ public:
                         CURRENT_RUNNING_PROCESS = nullptr;
                     } else if ((transition_from == CREATED || transition_from == BLOCK) &&
                                CURRENT_RUNNING_PROCESS != nullptr) {
-                        bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc, CURRENT_TIME, des->event_list);
+                        bool PREEMPT_CURRENT_PROCESS = scheduler->test_preempt(CURRENT_RUNNING_PROCESS, proc,
+                                                                               CURRENT_TIME, des->event_list);
                         if (PREEMPT_CURRENT_PROCESS) {
                             // remove future event for the preempted process from DES.
                             des->rm_event(CURRENT_RUNNING_PROCESS);
@@ -841,36 +850,28 @@ int main(int argc, char *argv[]) {
             break;
         }
         case 'P': {
-            regex pattern("P(\\d+)(?::(\\d+))?");
-            smatch matches;
-            if (regex_match(program_arguments.flag_s_value, matches, pattern)) {
-                if (matches.size() < 2) {
-                    cout << "Error: No quantum provided" << endl;
-                    return 1;
-                }
-                int quantum = stoi(matches[1]);
-                int max_prio = matches[2].matched ? std::stoi(matches[2]) : 4;
+            size_t colon_pos = program_arguments.flag_s_value.find(':');
+            if (colon_pos != string::npos) {
+                int quantum = stoi(program_arguments.flag_s_value.substr(1, colon_pos - 1));
+                int max_prio = stoi(program_arguments.flag_s_value.substr(colon_pos + 1));
+
                 scheduler = new PRIO(quantum, max_prio);
             } else {
-                cout << "Error: Incorrect args passed" << endl;
-                return 1;
+                int quantum = stoi(program_arguments.flag_s_value.substr(1));
+                scheduler = new PRIO(quantum, 4);
             }
             break;
         }
         case 'E': {
-            regex pattern("E(\\d+)(?::(\\d+))?");
-            smatch matches;
-            if (regex_match(program_arguments.flag_s_value, matches, pattern)) {
-                if (matches.size() < 2) {
-                    cout << "Error: No quantum provided" << endl;
-                    return 1;
-                }
-                int quantum = stoi(matches[1]);
-                int max_prio = matches[2].matched ? std::stoi(matches[2]) : 4;
+            size_t colon_pos = program_arguments.flag_s_value.find(':');
+            if (colon_pos != string::npos) {
+                int quantum = stoi(program_arguments.flag_s_value.substr(1, colon_pos - 1));
+                int max_prio = stoi(program_arguments.flag_s_value.substr(colon_pos + 1));
+
                 scheduler = new PREPRIO(quantum, max_prio);
             } else {
-                cout << "Error: Incorrect args passed" << endl;
-                return 1;
+                int quantum = stoi(program_arguments.flag_s_value.substr(1));
+                scheduler = new PREPRIO(quantum, 4);
             }
             break;
         }
